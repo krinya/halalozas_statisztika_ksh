@@ -1,0 +1,156 @@
+---
+title: "tobblethalalozasok"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(ggplot2)
+library(plotly)
+library(readxl)
+library(zoo)
+```
+
+# Get the data
+
+## Read in files
+
+```{r}
+folder_path <- "C:/Users/x004896/OneDrive - Audax/halalozas_ksh/" 
+
+my_data <- fread("C:/Users/x004896/OneDrive - Audax/halalozas_ksh/data/csv/6.csv",
+                 encoding = "UTF-8", skip = 4)
+```
+
+## Rename columns
+
+```{r}
+colnames(my_data) <- c("year",
+                       "week",
+                       "date_from",
+                       "date_to",
+                       "ferfi_0–34",
+                      "ferfi_35–39",
+                      "ferfi_40–44",
+                      "ferfi_45–49",
+                      "ferfi_50–54",
+                      "ferfi_55–59",
+                      "ferfi_60–64",
+                      "ferfi_65–69",
+                      "ferfi_70–74",
+                      "ferfi_75–79",
+                      "ferfi_80–84",
+                      "ferfi_85–89",
+                      "ferfi_90",
+                      "ferfi_osszesen",
+                      "no_0–34",
+                      "no_35–39",
+                      "no_40–44",
+                      "no_45–49",
+                      "no_50–54",
+                      "no_55–59",
+                      "no_60–64",
+                      "no_65–69",
+                      "no_70–74",
+                      "no_75–79",
+                      "no_80–84",
+                      "no_85–89",
+                      "no_90",
+                      "no_osszesen",
+                      "all_0–34",
+                      "all_35–39",
+                      "all_40–44",
+                      "all_45–49",
+                      "all_50–54",
+                      "all_55–59",
+                      "all_60–64",
+                      "all_65–69",
+                      "all_70–74",
+                      "all_75–79",
+                      "all_80–84",
+                      "all_85–89",
+                      "all_90",
+                      "all_osszesen"
+                      )
+
+my_data[, date_from:= NULL]
+my_data[, date_to:= NULL]
+```
+
+# Manuplaite data
+
+## Fill in NA values
+```{r}
+new <- zoo(my_data$year)
+new <- na.locf(new, fromLast = FALSE)
+new <- as.numeric(new)
+
+my_data[, year:= new]
+```
+
+## Wide to long
+```{r}
+my_data <- melt(my_data, id.vars=c("year", "week"))
+setDT(my_data)
+```
+
+
+```{r}
+my_data[, value:= gsub("–", "", value)]
+my_data$value <- as.numeric(gsub(",","",my_data$value))
+```
+
+## Fix week 53
+
+```{r}
+my_data[, week:= as.numeric(week)]
+
+week_fix <- my_data[week %in% c(52, 53)]
+week_fix <- week_fix[, .(value = mean(value, na.rm = T) %>% round()) , by =.(year, variable)]
+week_fix[, week:= 52]
+```
+
+```{r}
+my_data <- my_data[!(week %in% c(52, 53))]
+```
+
+```{r}
+my_data <- rbindlist(list(week_fix, my_data), fill = T)
+```
+
+```{r}
+unique(my_data$week)
+```
+
+
+# create gender and all
+
+```{r}
+my_data[grepl("ferfi", variable, fixed = TRUE), nem:= "ferfi"]
+my_data[grepl("no", variable, fixed = TRUE), nem:= "no"]
+my_data[grepl("all", variable, fixed = TRUE), nem:= "all"]
+
+
+```
+
+```{r}
+my_data[, date:= as.Date(paste(my_data$year, my_data$week, 1, sep="-"), "%Y-%U-%u")]
+my_data[, date_week:= paste0(year, "_", week)]
+```
+
+```{r}
+unique(my_data$nem)
+```
+
+# Plot 
+
+```{r}
+ggplot(my_data[nem == "all"], aes(x = date, y = value)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(. ~ variable, scales = "free_y") +
+  theme_bw()
+```
+
+
+# Summary
